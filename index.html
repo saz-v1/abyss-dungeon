@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ABYSS — Dungeon Crawler</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700;900&family=Cinzel:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Cinzel', serif;
+    overflow: hidden;
+    position: relative;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 20% 50%, rgba(80, 0, 0, 0.15) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 50%, rgba(0, 30, 80, 0.15) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Scanline overlay */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.04) 2px,
+      rgba(0,0,0,0.04) 4px
+    );
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  #game-wrapper {
+    position: relative;
+    z-index: 1;
+  }
+
+  #title-screen {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.97);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    gap: 0;
+    animation: fadeIn 1s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
+
+  .title-glow {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 72px;
+    font-weight: 900;
+    color: #fff;
+    letter-spacing: 0.2em;
+    text-shadow:
+      0 0 20px rgba(200, 50, 50, 0.9),
+      0 0 60px rgba(200, 50, 50, 0.5),
+      0 0 120px rgba(200, 50, 50, 0.2);
+    animation: pulse 3s ease-in-out infinite;
+    line-height: 1;
+  }
+
+  @keyframes pulse {
+    0%, 100% { text-shadow: 0 0 20px rgba(200,50,50,0.9), 0 0 60px rgba(200,50,50,0.5), 0 0 120px rgba(200,50,50,0.2); }
+    50% { text-shadow: 0 0 30px rgba(220,80,80,1), 0 0 80px rgba(220,80,80,0.7), 0 0 160px rgba(220,80,80,0.3); }
+  }
+
+  .title-sub {
+    font-family: 'Cinzel', serif;
+    font-size: 13px;
+    font-weight: 400;
+    color: rgba(255,255,255,0.35);
+    letter-spacing: 0.6em;
+    margin-top: 12px;
+    text-transform: uppercase;
+  }
+
+  .title-divider {
+    width: 300px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(200,50,50,0.6), transparent);
+    margin: 36px auto;
+  }
+
+  .controls-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 32px;
+    margin-bottom: 40px;
+  }
+
+  .ctrl {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: rgba(255,255,255,0.7);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+  }
+
+  .key {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.9);
+    font-family: 'Cinzel', serif;
+    font-size: 10px;
+    padding: 3px 8px;
+    min-width: 28px;
+    letter-spacing: 0.05em;
+    box-shadow: 0 2px 0 rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+  }
+
+  .start-btn {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.3em;
+    color: #fff;
+    background: transparent;
+    border: 1px solid rgba(200,50,50,0.6);
+    padding: 14px 48px;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s;
+    text-transform: uppercase;
+  }
+
+  .start-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(200,50,50,0);
+    transition: background 0.3s;
+  }
+
+  .start-btn:hover::before { background: rgba(200,50,50,0.15); }
+  .start-btn:hover {
+    border-color: rgba(220,80,80,0.9);
+    box-shadow: 0 0 20px rgba(200,50,50,0.3), inset 0 0 20px rgba(200,50,50,0.05);
+    text-shadow: 0 0 15px rgba(255,100,100,0.6);
+  }
+
+  .blink { animation: blink 1.4s step-end infinite; }
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+  /* HUD */
+  #hud {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    background: linear-gradient(180deg, rgba(0,0,0,0.85) 0%, transparent 100%);
+    z-index: 20;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.5s;
+  }
+
+  #hud.visible { opacity: 1; }
+
+  .hud-section {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .hud-label {
+    font-size: 9px;
+    letter-spacing: 0.25em;
+    color: rgba(255,255,255,0.3);
+    text-transform: uppercase;
+  }
+
+  .hud-value {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 18px;
+    color: #fff;
+    text-shadow: 0 0 10px rgba(200,50,50,0.7);
+    min-width: 28px;
+    text-align: center;
+  }
+
+  /* Health bar */
+  .health-bar-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .health-bar-outer {
+    width: 120px;
+    height: 6px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.1);
+    position: relative;
+  }
+
+  .health-bar-inner {
+    height: 100%;
+    background: linear-gradient(90deg, #8b0000, #dc143c);
+    transition: width 0.3s ease;
+    box-shadow: 0 0 8px rgba(220,20,60,0.6);
+    width: 100%;
+  }
+
+  /* Cooldown indicators */
+  .cooldown-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .cooldown-orb {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.06);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .cooldown-fill {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 100%;
+    background: rgba(200,50,50,0.5);
+    transition: height 0.1s;
+  }
+
+  .cooldown-fill.dash { background: rgba(50,120,200,0.5); }
+
+  /* Death / Wave clear screens */
+  #overlay-screen {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 40;
+    background: rgba(0,0,0,0);
+    transition: background 1s ease;
+    pointer-events: none;
+  }
+
+  #overlay-screen.active {
+    display: flex;
+    pointer-events: all;
+  }
+
+  .overlay-title {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 52px;
+    font-weight: 900;
+    color: #fff;
+    text-align: center;
+    letter-spacing: 0.15em;
+    line-height: 1.1;
+  }
+
+  .overlay-sub {
+    font-size: 12px;
+    letter-spacing: 0.4em;
+    color: rgba(255,255,255,0.4);
+    margin-top: 16px;
+  }
+
+  .overlay-btn {
+    font-family: 'Cinzel', serif;
+    font-size: 11px;
+    letter-spacing: 0.35em;
+    color: rgba(255,255,255,0.7);
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.2);
+    padding: 10px 32px;
+    cursor: pointer;
+    margin-top: 40px;
+    transition: all 0.3s;
+  }
+
+  .overlay-btn:hover {
+    color: #fff;
+    border-color: rgba(255,255,255,0.5);
+    background: rgba(255,255,255,0.05);
+  }
+
+  /* Wave announcement */
+  #wave-announce {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    pointer-events: none;
+    z-index: 30;
+    opacity: 0;
+  }
+
+  .wave-text {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 36px;
+    color: #fff;
+    letter-spacing: 0.2em;
+    text-shadow: 0 0 30px rgba(200,50,50,0.8);
+  }
+
+  .wave-num {
+    font-size: 64px;
+    font-weight: 900;
+    display: block;
+    line-height: 1;
+  }
+
+  /* Corner decorations */
+  .corner {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    opacity: 0.3;
+    pointer-events: none;
+    z-index: 10;
+  }
+  .corner-tl { top: 56px; left: 8px; border-top: 1px solid #fff; border-left: 1px solid #fff; }
+  .corner-tr { top: 56px; right: 8px; border-top: 1px solid #fff; border-right: 1px solid #fff; }
+  .corner-bl { bottom: 8px; left: 8px; border-bottom: 1px solid #fff; border-left: 1px solid #fff; }
+  .corner-br { bottom: 8px; right: 8px; border-bottom: 1px solid #fff; border-right: 1px solid #fff; }
+
+  #phaser-canvas canvas {
+    display: block;
+  }
+</style>
+</head>
+<body>
+<div id="game-wrapper">
+  <div id="phaser-canvas"></div>
+
+  <!-- Corner deco -->
+  <div class="corner corner-tl"></div>
+  <div class="corner corner-tr"></div>
+  <div class="corner corner-bl"></div>
+  <div class="corner corner-br"></div>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div class="hud-section">
+      <div>
+        <div class="hud-label">Vitality</div>
+        <div class="health-bar-wrap">
+          <div class="health-bar-outer">
+            <div class="health-bar-inner" id="health-bar"></div>
+          </div>
+          <div class="hud-label" id="health-text" style="color:rgba(255,255,255,0.5)">5 / 5</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hud-section" style="flex-direction:column; gap:2px; text-align:center">
+      <div class="hud-label">Wave</div>
+      <div class="hud-value" id="wave-display">I</div>
+    </div>
+
+    <div class="hud-section">
+      <div class="cooldown-wrap">
+        <div class="cooldown-orb">
+          <div class="cooldown-fill" id="slash-cd"></div>
+        </div>
+        <div class="hud-label">Slash</div>
+      </div>
+      <div class="cooldown-wrap">
+        <div class="cooldown-orb">
+          <div class="cooldown-fill dash" id="dash-cd"></div>
+        </div>
+        <div class="hud-label">Dash</div>
+      </div>
+      <div>
+        <div class="hud-label">Kills</div>
+        <div class="hud-value" id="kill-count">0</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Wave announce -->
+  <div id="wave-announce">
+    <div class="wave-text">
+      WAVE <span class="wave-num" id="wave-number">I</span>
+    </div>
+  </div>
+
+  <!-- Title screen -->
+  <div id="title-screen">
+    <div class="title-glow">ABYSS</div>
+    <div class="title-sub">Dungeon Crawler</div>
+    <div class="title-divider"></div>
+
+    <div class="controls-grid">
+      <div class="ctrl"><span class="key">↑↓←→</span> Move</div>
+      <div class="ctrl"><span class="key">Click</span> Slash</div>
+      <div class="ctrl"><span class="key">Shift</span> Dash</div>
+      <div class="ctrl"><span class="key">R</span> New Map</div>
+    </div>
+
+    <button class="start-btn" id="start-btn">DESCEND</button>
+    <div style="margin-top: 20px; font-size: 10px; letter-spacing: 0.3em; color: rgba(255,255,255,0.2);" class="blink">CLICK TO BEGIN</div>
+  </div>
+
+  <!-- Game over -->
+  <div id="overlay-screen">
+    <div class="overlay-title" id="overlay-title">YOU DIED</div>
+    <div class="overlay-sub" id="overlay-sub">THE ABYSS CLAIMS ANOTHER SOUL</div>
+    <button class="overlay-btn" id="overlay-btn">DESCEND AGAIN</button>
+  </div>
+</div>
+
+<script>
+// ── Globals ──────────────────────────────────────────────────────────────────
+const TILE = 32;
+const MAP_W = 25, MAP_H = 19;
+
+let gameScene = null;
+let kills = 0;
+let wave = 1;
+let playerHealth = 5;
+let maxHealth = 5;
+let invincible = false;
+
+const ROMAN = ['','I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
+
+// ── UI helpers ────────────────────────────────────────────────────────────────
+function setHealth(hp) {
+  playerHealth = hp;
+  const pct = Math.max(0, hp / maxHealth * 100);
+  document.getElementById('health-bar').style.width = pct + '%';
+  document.getElementById('health-text').textContent = `${Math.max(0,hp)} / ${maxHealth}`;
+}
+
+function setKills(n) {
+  kills = n;
+  document.getElementById('kill-count').textContent = n;
+}
+
+function setWaveDisplay(w) {
+  document.getElementById('wave-display').textContent = ROMAN[Math.min(w, 12)] || w;
+}
+
+function announceWave(w) {
+  const el = document.getElementById('wave-announce');
+  document.getElementById('wave-number').textContent = ROMAN[Math.min(w, 12)] || w;
+  el.style.transition = 'opacity 0.4s ease';
+  el.style.opacity = '1';
+  setTimeout(() => {
+    el.style.transition = 'opacity 1s ease';
+    el.style.opacity = '0';
+  }, 1800);
+}
+
+function showOverlay(title, sub) {
+  const el = document.getElementById('overlay-screen');
+  document.getElementById('overlay-title').textContent = title;
+  document.getElementById('overlay-sub').textContent = sub;
+  el.classList.add('active');
+  el.style.background = 'rgba(0,0,0,0.82)';
+}
+
+function hideOverlay() {
+  const el = document.getElementById('overlay-screen');
+  el.classList.remove('active');
+  el.style.background = 'rgba(0,0,0,0)';
+}
+
+// ── Map generation ────────────────────────────────────────────────────────────
+function generateMap() {
+  let map = [];
+  for (let y = 0; y < MAP_H; y++) {
+    map[y] = [];
+    for (let x = 0; x < MAP_W; x++) {
+      // Always border walls
+      map[y][x] = (x === 0 || y === 0 || x === MAP_W-1 || y === MAP_H-1) ? 1
+        : Math.random() < 0.40 ? 1 : 0;
+    }
+  }
+  // Cellular automata passes
+  for (let step = 0; step < 5; step++) {
+    const next = [];
+    for (let y = 0; y < MAP_H; y++) {
+      next[y] = [];
+      for (let x = 0; x < MAP_W; x++) {
+        if (x === 0 || y === 0 || x === MAP_W-1 || y === MAP_H-1) { next[y][x] = 1; continue; }
+        let n = 0;
+        for (let dy = -1; dy <= 1; dy++)
+          for (let dx = -1; dx <= 1; dx++) {
+            if (!dx && !dy) continue;
+            const nx = x+dx, ny = y+dy;
+            if (nx<0||ny<0||nx>=MAP_W||ny>=MAP_H||map[ny][nx]===1) n++;
+          }
+        next[y][x] = n >= 5 ? 1 : 0;
+      }
+    }
+    map = next;
+  }
+  // Clear center spawn area
+  for (let dy = -2; dy <= 2; dy++)
+    for (let dx = -3; dx <= 3; dx++)
+      map[Math.floor(MAP_H/2)+dy][Math.floor(MAP_W/2)+dx] = 0;
+
+  return map;
+}
+
+function findOpenTile(map, avoidCX, avoidCY, minDist) {
+  let attempts = 0;
+  while (attempts++ < 200) {
+    const x = Phaser.Math.Between(2, MAP_W - 3);
+    const y = Phaser.Math.Between(2, MAP_H - 3);
+    if (map[y][x] === 0) {
+      const dist = Phaser.Math.Distance.Between(x, y, avoidCX, avoidCY);
+      if (dist >= minDist) return { x: x * TILE + TILE/2, y: y * TILE + TILE/2 };
+    }
+  }
+  return { x: MAP_W/2 * TILE, y: MAP_H/2 * TILE };
+}
+
+// ── Phaser Scene ──────────────────────────────────────────────────────────────
+class DungeonScene extends Phaser.Scene {
+  constructor() { super({ key: 'Dungeon' }); }
+
+  create() {
+    this.slashCD = 0;
+    this.dashCD = 0;
+    this.enemies = null;
+    this.slashes = [];
+    this.currentWave = wave;
+    this.waveEnemyCount = 4 + wave * 2;
+    this.enemiesKilledThisWave = 0;
+    this.mapData = null;
+
+    this.buildMap();
+    this.spawnPlayer();
+    this.spawnEnemies(this.waveEnemyCount);
+    this.setupInput();
+    this.setupCollisions();
+
+    // Subtle vignette via graphics
+    const vign = this.add.graphics();
+    vign.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0, 0, 0.7, 0);
+    // vignette is just decorative - skip complex implementation
+
+    setHealth(playerHealth);
+    setKills(kills);
+    setWaveDisplay(wave);
+
+    // Particle emitter for slash effect
+    this.slashParticles = [];
+  }
+
+  buildMap() {
+    const map = generateMap();
+    this.mapData = map;
+    this.walls = this.physics.add.staticGroup();
+
+    const gfx = this.add.graphics();
+
+    for (let y = 0; y < MAP_H; y++) {
+      for (let x = 0; x < MAP_W; x++) {
+        const px = x * TILE, py = y * TILE;
+        if (map[y][x] === 1) {
+          // Wall: layered look
+          gfx.fillStyle(0x1a1a1a);
+          gfx.fillRect(px, py, TILE, TILE);
+          gfx.fillStyle(0x252525);
+          gfx.fillRect(px+1, py+1, TILE-2, TILE-2);
+          gfx.lineStyle(1, 0x0d0d0d, 1);
+          gfx.strokeRect(px, py, TILE, TILE);
+
+          // Add subtle detail to some walls
+          if (Math.random() < 0.2) {
+            gfx.fillStyle(0x2a2a2a, 0.5);
+            gfx.fillRect(px+4, py+4, 4, 4);
+          }
+
+          const wall = this.add.zone(px + TILE/2, py + TILE/2, TILE, TILE);
+          this.physics.add.existing(wall, true);
+          this.walls.add(wall);
+        } else {
+          // Floor tiles — subtle variation
+          const shade = 0x0e0e0e + (Math.random() < 0.15 ? 0x050505 : 0);
+          gfx.fillStyle(shade);
+          gfx.fillRect(px, py, TILE, TILE);
+          gfx.lineStyle(1, 0x111111, 0.5);
+          gfx.strokeRect(px, py, TILE, TILE);
+        }
+      }
+    }
+  }
+
+  spawnPlayer() {
+    const cx = Math.floor(MAP_W/2) * TILE + TILE/2;
+    const cy = Math.floor(MAP_H/2) * TILE + TILE/2;
+
+    // Player: drawn with graphics
+    const playerGfx = this.add.graphics();
+    this.drawPlayerGfx(playerGfx);
+
+    this.player = this.physics.add.image(cx, cy, '__DEFAULT');
+    this.player.setVisible(false);
+    this.player.setCollideWorldBounds(true);
+    this.player.setSize(20, 20);
+
+    // Visual representation
+    this.playerVisual = playerGfx;
+    this.playerVisual.setDepth(10);
+
+    // Glow effect
+    this.playerGlow = this.add.graphics();
+    this.playerGlow.setDepth(9);
+  }
+
+  drawPlayerGfx(gfx) {
+    gfx.clear();
+    // Body
+    gfx.fillStyle(0xc8c8c8);
+    gfx.fillRect(-8, -8, 16, 16);
+    // Highlight
+    gfx.fillStyle(0xffffff, 0.4);
+    gfx.fillRect(-6, -8, 8, 3);
+    // Eye/accent
+    gfx.fillStyle(0xdc143c);
+    gfx.fillRect(-3, -3, 6, 2);
+    // Border
+    gfx.lineStyle(1, 0x888888);
+    gfx.strokeRect(-8, -8, 16, 16);
+  }
+
+  spawnEnemies(count) {
+    this.enemies = this.physics.add.group();
+    const cx = Math.floor(MAP_W/2), cy = Math.floor(MAP_H/2);
+
+    for (let i = 0; i < count; i++) {
+      const pos = findOpenTile(this.mapData, cx, cy, 6);
+      const e = this.physics.add.image(pos.x, pos.y, '__DEFAULT');
+      e.setVisible(false);
+      e.setSize(20, 20);
+      e.speed = 45 + Math.random() * 50 + wave * 5;
+      e.hp = 1 + (wave > 3 ? 1 : 0);
+      e.maxHp = e.hp;
+
+      // Visual
+      const eg = this.add.graphics();
+      this.drawEnemyGfx(eg, e.hp);
+      eg.setDepth(8);
+      e.gfx = eg;
+
+      this.enemies.add(e);
+    }
+  }
+
+  drawEnemyGfx(gfx, hp=1) {
+    gfx.clear();
+    const col = hp > 1 ? 0x8b0000 : 0xcc2222;
+    gfx.fillStyle(col);
+    gfx.fillTriangle(-10, 10, 10, 10, 0, -10);
+    gfx.lineStyle(1, 0xff4444, 0.6);
+    gfx.strokeTriangle(-10, 10, 10, 10, 0, -10);
+    gfx.fillStyle(0xff6666, 0.3);
+    gfx.fillTriangle(-6, 6, 6, 6, 0, -5);
+  }
+
+  setupInput() {
+    this.cursors = this.input.keyboard.createCursorKeys();
+    this.dashKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
+    this.regenKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
+    this.wasd = {
+      up: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
+      down: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
+      left: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
+      right: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
+    };
+
+    this.input.on('pointerdown', (ptr) => {
+      if (this.slashCD > 0) return;
+      this.slashCD = 25;
+      this.doSlash(ptr.worldX, ptr.worldY);
+    });
+  }
+
+  setupCollisions() {
+    this.physics.add.collider(this.player, this.walls);
+    this.physics.add.collider(this.enemies, this.walls);
+    this.physics.add.collider(this.enemies, this.enemies);
+    this.physics.add.overlap(this.player, this.enemies, (p, e) => {
+      this.playerHit();
+    });
+  }
+
+  doSlash(wx, wy) {
+    // Direction from player toward pointer
+    const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, wx, wy);
+    const reach = 52;
+    const sx = this.player.x + Math.cos(angle) * reach/2;
+    const sy = this.player.y + Math.sin(angle) * reach/2;
+
+    // Visual slash arc
+    const slashGfx = this.add.graphics();
+    slashGfx.setDepth(15);
+    slashGfx.lineStyle(3, 0xff4444, 0.9);
+    slashGfx.beginPath();
+    slashGfx.arc(this.player.x, this.player.y, reach, angle - 0.7, angle + 0.7, false);
+    slashGfx.strokePath();
+    slashGfx.lineStyle(6, 0xff0000, 0.3);
+    slashGfx.strokePath();
+
+    // Particles
+    for (let i = 0; i < 5; i++) {
+      const a = angle - 0.7 + (i/4)*1.4;
+      const px = this.player.x + Math.cos(a) * reach;
+      const py = this.player.y + Math.sin(a) * reach;
+      const pg = this.add.graphics();
+      pg.fillStyle(0xff4444, 0.8);
+      pg.fillCircle(0, 0, 2 + Math.random()*3);
+      pg.setPosition(px, py);
+      pg.setDepth(16);
+      this.tweens.add({
+        targets: pg, alpha: 0, scaleX: 0.1, scaleY: 0.1, duration: 300,
+        onComplete: () => pg.destroy()
+      });
+    }
+
+    // Hit detection zone
+    const hitZone = this.physics.add.image(sx, sy, '__DEFAULT');
+    hitZone.setSize(reach * 1.5, reach * 1.5);
+    hitZone.setVisible(false);
+
+    this.physics.overlap(hitZone, this.enemies, (hz, enemy) => {
+      this.hitEnemy(enemy);
+    });
+
+    this.time.delayedCall(120, () => {
+      slashGfx.destroy();
+      hitZone.destroy();
+    });
+  }
+
+  hitEnemy(enemy) {
+    enemy.hp--;
+    if (enemy.hp <= 0) {
+      this.killEnemy(enemy);
+    } else {
+      // Flash
+      this.tweens.add({ targets: enemy.gfx, alpha: 0.3, duration: 80, yoyo: true });
+    }
+  }
+
+  killEnemy(enemy) {
+    // Death burst
+    for (let i = 0; i < 8; i++) {
+      const a = (i/8) * Math.PI * 2;
+      const pg = this.add.graphics();
+      pg.fillStyle(0xcc2222, 0.8);
+      pg.fillCircle(0, 0, 2 + Math.random()*4);
+      pg.setPosition(enemy.x, enemy.y);
+      pg.setDepth(20);
+      this.tweens.add({
+        targets: pg,
+        x: enemy.x + Math.cos(a) * (20 + Math.random()*30),
+        y: enemy.y + Math.sin(a) * (20 + Math.random()*30),
+        alpha: 0, scaleX: 0.1, scaleY: 0.1,
+        duration: 400 + Math.random()*200,
+        onComplete: () => pg.destroy()
+      });
+    }
+
+    enemy.gfx.destroy();
+    enemy.destroy();
+
+    setKills(kills + 1);
+    this.enemiesKilledThisWave++;
+
+    if (this.enemies.countActive(true) === 0) {
+      this.time.delayedCall(1000, () => this.nextWave());
+    }
+  }
+
+  playerHit() {
+    if (invincible) return;
+    invincible = true;
+
+    setHealth(playerHealth - 1);
+
+    // Flash player red
+    this.tweens.add({
+      targets: this.playerVisual,
+      alpha: 0.2, duration: 80, yoyo: true, repeat: 4,
+      onComplete: () => { this.playerVisual.alpha = 1; }
+    });
+
+    // Screen flash
+    const flash = this.add.graphics();
+    flash.fillStyle(0xff0000, 0.25);
+    flash.fillRect(0, 0, MAP_W*TILE, MAP_H*TILE);
+    flash.setDepth(50);
+    this.tweens.add({ targets: flash, alpha: 0, duration: 300, onComplete: () => flash.destroy() });
+
+    if (playerHealth <= 0) {
+      this.time.delayedCall(400, () => this.gameOver());
+      return;
+    }
+
+    this.time.delayedCall(1200, () => { invincible = false; });
+  }
+
+  nextWave() {
+    wave++;
+    this.currentWave = wave;
+    maxHealth = Math.min(maxHealth + (wave % 3 === 0 ? 1 : 0), 10);
+    setHealth(Math.min(playerHealth + 1, maxHealth));
+    setWaveDisplay(wave);
+    announceWave(wave);
+
+    // Regenerate map
+    this.time.delayedCall(600, () => {
+      this.scene.restart();
+    });
+  }
+
+  gameOver() {
+    showOverlay('YOU DIED', `REACHED WAVE ${ROMAN[Math.min(wave,12)] || wave} — ${kills} KILLS`);
+  }
+
+  update() {
+    if (!this.player || !this.player.active) return;
+
+    // Movement
+    this.player.setVelocity(0);
+    const speed = 160;
+    const left  = this.cursors.left.isDown  || this.wasd.left.isDown;
+    const right = this.cursors.right.isDown || this.wasd.right.isDown;
+    const up    = this.cursors.up.isDown    || this.wasd.up.isDown;
+    const down  = this.cursors.down.isDown  || this.wasd.down.isDown;
+
+    if (left)  this.player.setVelocityX(-speed);
+    if (right) this.player.setVelocityX(speed);
+    if (up)    this.player.setVelocityY(-speed);
+    if (down)  this.player.setVelocityY(speed);
+
+    // Normalize diagonal
+    if ((left || right) && (up || down)) {
+      this.player.setVelocity(
+        this.player.body.velocity.x * 0.707,
+        this.player.body.velocity.y * 0.707
+      );
+    }
+
+    // Dash
+    if (Phaser.Input.Keyboard.JustDown(this.dashKey) && this.dashCD <= 0) {
+      this.dashCD = 70;
+      const ds = 480;
+      if (left)  this.player.setVelocityX(-ds);
+      if (right) this.player.setVelocityX(ds);
+      if (up)    this.player.setVelocityY(-ds);
+      if (down)  this.player.setVelocityY(ds);
+
+      // Dash trail
+      const trailGfx = this.add.graphics();
+      trailGfx.fillStyle(0x4488ff, 0.4);
+      trailGfx.fillRect(this.player.x - 8, this.player.y - 8, 16, 16);
+      trailGfx.setDepth(7);
+      this.tweens.add({ targets: trailGfx, alpha: 0, duration: 200, onComplete: () => trailGfx.destroy() });
+    }
+
+    // Regen map
+    if (Phaser.Input.Keyboard.JustDown(this.regenKey)) {
+      this.scene.restart();
+    }
+
+    // Enemy AI
+    this.enemies.children.iterate(e => {
+      if (!e || !e.active) return;
+      const angle = Phaser.Math.Angle.Between(e.x, e.y, this.player.x, this.player.y);
+      e.setVelocity(Math.cos(angle) * e.speed, Math.sin(angle) * e.speed);
+      if (e.gfx) e.gfx.setPosition(e.x, e.y);
+    });
+
+    // Sync player visual
+    if (this.playerVisual) {
+      this.playerVisual.setPosition(this.player.x, this.player.y);
+    }
+
+    // Glow pulse
+    if (this.playerGlow) {
+      const t = this.time.now;
+      const alpha = 0.1 + Math.sin(t * 0.004) * 0.05;
+      this.playerGlow.clear();
+      this.playerGlow.fillStyle(0xffffff, alpha);
+      this.playerGlow.fillCircle(this.player.x, this.player.y, 18);
+    }
+
+    // Cooldowns
+    if (this.slashCD > 0) this.slashCD--;
+    if (this.dashCD > 0) this.dashCD--;
+
+    // Update HUD cooldown orbs
+    document.getElementById('slash-cd').style.height = (this.slashCD / 25 * 100) + '%';
+    document.getElementById('dash-cd').style.height = (this.dashCD / 70 * 100) + '%';
+  }
+}
+
+// ── Phaser config ─────────────────────────────────────────────────────────────
+const config = {
+  type: Phaser.AUTO,
+  width: MAP_W * TILE,
+  height: MAP_H * TILE,
+  backgroundColor: '#080808',
+  parent: 'phaser-canvas',
+  physics: { default: 'arcade', arcade: { debug: false } },
+  scene: DungeonScene
+};
+
+const game = new Phaser.Game(config);
+gameScene = game;
+
+// ── UI events ─────────────────────────────────────────────────────────────────
+document.getElementById('start-btn').addEventListener('click', startGame);
+document.getElementById('title-screen').addEventListener('click', startGame);
+document.getElementById('overlay-btn').addEventListener('click', restartGame);
+
+function startGame() {
+  const ts = document.getElementById('title-screen');
+  ts.style.animation = 'fadeOut 0.5s ease forwards';
+  setTimeout(() => { ts.style.display = 'none'; }, 500);
+  document.getElementById('hud').classList.add('visible');
+  wave = 1;
+  kills = 0;
+  playerHealth = 5;
+  maxHealth = 5;
+  invincible = false;
+  announceWave(1);
+}
+
+function restartGame() {
+  hideOverlay();
+  wave = 1;
+  kills = 0;
+  playerHealth = 5;
+  maxHealth = 5;
+  invincible = false;
+  setHealth(5);
+  setKills(0);
+  setWaveDisplay(1);
+  game.scene.getScene('Dungeon').scene.restart();
+  announceWave(1);
+}
+</script>
+</body>
+</html>
