@@ -10,7 +10,28 @@ body::after {
   background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.04) 2px,rgba(0,0,0,.04) 4px);
   pointer-events:none; z-index:100;
 }
-#game-wrapper { position:relative; z-index:1; }
+#game-wrapper {
+  position:relative; z-index:1;
+  width:100%; height:100%;
+  display:flex; align-items:center; justify-content:center;
+}
+/* Phaser Scale Manager injects a canvas — make it fill the wrapper */
+#phaser-canvas {
+  position:relative;
+  width:100% !important;
+  height:100% !important;
+}
+#phaser-canvas canvas {
+  display:block;
+  /* Phaser Scale.FIT controls the actual size; this ensures no extra space */
+  max-width:100%;
+  max-height:100%;
+}
+/* All overlaid UI panels must match the canvas size/position */
+#hud, #wave-announce, #touch-controls, #title-screen, #overlay-screen,
+.corner {
+  position:absolute;
+}
 
 @keyframes fadeIn  { from{opacity:0} to{opacity:1} }
 @keyframes fadeOut { from{opacity:1} to{opacity:0} }
@@ -93,7 +114,6 @@ body::after {
 .corner-tr { top:56px; right:8px; border-top:1px solid #fff; border-right:1px solid #fff; }
 .corner-bl { bottom:8px; left:8px; border-bottom:1px solid #fff; border-left:1px solid #fff; }
 .corner-br { bottom:8px; right:8px; border-bottom:1px solid #fff; border-right:1px solid #fff; }
-#phaser-canvas canvas { display:block; }
 
 /* ── Touch controls ── */
 #touch-controls {

@@ -297,10 +297,17 @@ class DungeonScene extends Phaser.Scene {
 
 /* ── Phaser config ── */
 var game = new Phaser.Game({
-  type:Phaser.AUTO, width:MAP_W*TILE, height:MAP_H*TILE,
-  backgroundColor:'#080808', parent:'phaser-canvas',
-  physics:{default:'arcade',arcade:{debug:false}},
-  scene:DungeonScene
+  type: Phaser.AUTO,
+  backgroundColor: '#080808',
+  parent: 'phaser-canvas',
+  scale: {
+    mode:       Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+    width:  MAP_W * TILE,
+    height: MAP_H * TILE,
+  },
+  physics: { default:'arcade', arcade:{debug:false} },
+  scene: DungeonScene
 });
 
 /* ── Touch joystick ── */
